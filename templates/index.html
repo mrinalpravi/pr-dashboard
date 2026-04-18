@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PR Merge Time Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --card: #16161f;
+    --border: #1e1e2e;
+    --accent: #7c5cfc;
+    --accent2: #00e5c8;
+    --accent3: #ff6b6b;
+    --accent4: #ffd166;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --glow: rgba(124,92,252,0.15);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(124,92,252,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,92,252,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .noise {
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.5;
+    z-index: 0;
+  }
+
+  .wrapper { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 2rem; }
+
+  /* Header */
+  header {
+    padding: 2.5rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .logo-icon {
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    box-shadow: 0 0 20px var(--glow);
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.2rem, 3vw, 1.8rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #fff 40%, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .header-tag {
+    font-size: 0.65rem;
+    color: var(--accent2);
+    background: rgba(0,229,200,0.08);
+    border: 1px solid rgba(0,229,200,0.2);
+    border-radius: 4px;
+    padding: 0.2rem 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Repo selector */
+  .selector-bar {
+    padding: 1.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .selector-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    min-width: 260px;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6b80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.8rem center;
+    padding-right: 2rem;
+  }
+
+  select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124,92,252,0.15);
+  }
+
+  .load-btn {
+    background: linear-gradient(135deg, var(--accent), #9b7bff);
+    border: none;
+    color: #fff;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 0.65rem 1.4rem;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: opacity 0.2s, transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 4px 15px rgba(124,92,252,0.3);
+  }
+
+  .load-btn:hover { opacity: 0.9; box-shadow: 0 6px 25px rgba(124,92,252,0.4); }
+  .load-btn:active { transform: scale(0.98); }
+  .load-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.4rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s, transform 0.2s;
+    animation: fadeSlideUp 0.4s ease both;
+  }
+
+  .stat-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--line, linear-gradient(90deg, var(--accent), var(--accent2)));
+  }
+
+  .stat-card:nth-child(1) { --line: linear-gradient(90deg, #7c5cfc, #9b7bff); }
+  .stat-card:nth-child(2) { --line: linear-gradient(90deg, #00e5c8, #00b4a0); }
+  .stat-card:nth-child(3) { --line: linear-gradient(90deg, #ffd166, #ffb830); }
+  .stat-card:nth-child(4) { --line: linear-gradient(90deg, #ff6b6b, #ff4040); }
+
+  .stat-label {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.6rem;
+  }
+
+  .stat-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(135deg, #fff, var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .stat-unit {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.3rem;
+  }
+
+  /* Charts section */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  @media (max-width: 900px) {
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    animation: fadeSlideUp 0.5s ease both;
+  }
+
+  .chart-card.wide { grid-column: 1 / -1; }
+
+  .chart-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    color: #fff;
+    letter-spacing: -0.01em;
+  }
+
+  .chart-subtitle {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-bottom: 1.2rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .chart-wrap { position: relative; height: 260px; }
+
+  /* PR Table */
+  .table-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    overflow: hidden;
+    animation: fadeSlideUp 0.6s ease both;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+
+  thead th {
+    text-align: left;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    transition: background 0.15s;
+  }
+
+  tbody tr:hover { background: rgba(124,92,252,0.05); }
+
+  tbody td {
+    padding: 0.75rem;
+    vertical-align: middle;
+  }
+
+  .pr-title {
+    max-width: 280px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pr-link {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .pr-link:hover { color: var(--accent2); }
+
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .badge-fast { background: rgba(0,229,200,0.12); color: var(--accent2); border: 1px solid rgba(0,229,200,0.2); }
+  .badge-mid { background: rgba(255,209,102,0.12); color: var(--accent4); border: 1px solid rgba(255,209,102,0.2); }
+  .badge-slow { background: rgba(255,107,107,0.12); color: var(--accent3); border: 1px solid rgba(255,107,107,0.2); }
+
+  /* Loading / Empty state */
+  .state-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 280px;
+    gap: 1rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .state-box .icon { font-size: 2.5rem; opacity: 0.4; }
+
+  .spinner {
+    width: 36px; height: 36px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  #dashboard { display: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .overflow-x { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="wrapper">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⧉</div>
+      <div>
+        <h1>PR Velocity</h1>
+      </div>
+    </div>
+    <span class="header-tag">Merge Time Analytics</span>
+  </header>
+
+  <div class="selector-bar">
+    <span class="selector-label">Repository</span>
+    <select id="repoSelect"><option value="">— loading repos —</option></select>
+    <button class="load-btn" id="loadBtn" onclick="loadDashboard()" disabled>Analyze →</button>
+  </div>
+
+  <!-- Loading state -->
+  <div id="loadingState" style="display:none;">
+    <div class="state-box">
+      <div class="spinner"></div>
+      <span>Fetching PR data…</span>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="emptyState" style="display:none;">
+    <div class="state-box">
+      <div class="icon">🔍</div>
+      <span>No merged PRs found for this repository.</span>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard">
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <div class="charts-grid">
+      <div class="chart-card wide">
+        <div class="chart-title">Merge Time Over PRs</div>
+        <div class="chart-subtitle">Hours from open to merge · recent 50 PRs</div>
+        <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Distribution Buckets</div>
+        <div class="chart-subtitle">PRs by time-to-merge category</div>
+        <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Author Breakdown</div>
+        <div class="chart-subtitle">Avg merge time by contributor</div>
+        <div class="chart-wrap"><canvas id="authorChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="chart-title">Pull Requests</div>
+      <div class="chart-subtitle" style="margin-bottom:1rem;">Sorted by merge time</div>
+      <div class="overflow-x">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Title</th>
+              <th>Author</th>
+              <th>Opened</th>
+              <th>Merged</th>
+              <th>Time to Merge</th>
+              <th>Speed</th>
+            </tr>
+          </thead>
+          <tbody id="prTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let lineChartInst, barChartInst, authorChartInst;
+
+Chart.defaults.color = '#6b6b80';
+Chart.defaults.borderColor = '#1e1e2e';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+Chart.defaults.font.size = 11;
+
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  return r.json();
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  const repos = await fetchJSON('/api/repos');
+  const sel = document.getElementById('repoSelect');
+  sel.innerHTML = '<option value="">— select a repository —</option>';
+  repos.forEach(r => {
+    const o = document.createElement('option');
+    o.value = r.full_name;
+    o.textContent = r.name;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', () => {
+    document.getElementById('loadBtn').disabled = !sel.value;
+  });
+});
+
+async function loadDashboard() {
+  const repo = document.getElementById('repoSelect').value;
+  if (!repo) return;
+
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('loadingState').style.display = 'flex';
+
+  const data = await fetchJSON(`/api/summary?repo=${encodeURIComponent(repo)}`);
+  document.getElementById('loadingState').style.display = 'none';
+
+  if (!data.prs || data.prs.length === 0) {
+    document.getElementById('emptyState').style.display = 'flex';
+    return;
+  }
+
+  renderStats(data);
+  renderLineChart(data.prs);
+  renderBarChart(data.prs);
+  renderAuthorChart(data.prs);
+  renderTable(data.prs);
+
+  document.getElementById('dashboard').style.display = 'block';
+}
+
+function renderStats(data) {
+  const avgDays = (data.avg_hours / 24).toFixed(1);
+  const minDays = (data.min_hours / 24).toFixed(1);
+  const maxDays = (data.max_hours / 24).toFixed(1);
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total Merged PRs</div>
+      <div class="stat-value">${data.total}</div>
+      <div class="stat-unit">pull requests</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Merge Time</div>
+      <div class="stat-value">${avgDays}</div>
+      <div class="stat-unit">days on average</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Fastest Merge</div>
+      <div class="stat-value">${minDays}</div>
+      <div class="stat-unit">days minimum</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Slowest Merge</div>
+      <div class="stat-value">${maxDays}</div>
+      <div class="stat-unit">days maximum</div>
+    </div>
+  `;
+}
+
+function renderLineChart(prs) {
+  const sorted = [...prs].reverse();
+  const labels = sorted.map((p, i) => `#${p.number}`);
+  const values = sorted.map(p => +(p.hours_to_merge / 24).toFixed(2));
+
+  if (lineChartInst) lineChartInst.destroy();
+  lineChartInst = new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Days to Merge',
+        data: values,
+        borderColor: '#7c5cfc',
+        backgroundColor: 'rgba(124,92,252,0.08)',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#7c5cfc',
+        tension: 0.35,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 12, maxRotation: 0 } },
+        y: { title: { display: true, text: 'Days', color: '#6b6b80' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderBarChart(prs) {
+  const buckets = { '<2h': 0, '2–12h': 0, '12–24h': 0, '1–3d': 0, '3–7d': 0, '>7d': 0 };
+  prs.forEach(p => {
+    const h = p.hours_to_merge;
+    if (h < 2) buckets['<2h']++;
+    else if (h < 12) buckets['2–12h']++;
+    else if (h < 24) buckets['12–24h']++;
+    else if (h < 72) buckets['1–3d']++;
+    else if (h < 168) buckets['3–7d']++;
+    else buckets['>7d']++;
+  });
+
+  if (barChartInst) barChartInst.destroy();
+  barChartInst = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: Object.keys(buckets),
+      datasets: [{
+        data: Object.values(buckets),
+        backgroundColor: ['#00e5c8','#00b4a0','#7c5cfc','#ffd166','#ff9f43','#ff6b6b'],
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+      }
+    }
+  });
+}
+
+function renderAuthorChart(prs) {
+  const authorMap = {};
+  prs.forEach(p => {
+    if (!authorMap[p.author]) authorMap[p.author] = { total: 0, count: 0 };
+    authorMap[p.author].total += p.hours_to_merge;
+    authorMap[p.author].count++;
+  });
+  const authors = Object.entries(authorMap)
+    .map(([k, v]) => ({ name: k, avg: +(v.total / v.count / 24).toFixed(2) }))
+    .sort((a, b) => a.avg - b.avg)
+    .slice(0, 10);
+
+  if (authorChartInst) authorChartInst.destroy();
+  authorChartInst = new Chart(document.getElementById('authorChart'), {
+    type: 'bar',
+    data: {
+      labels: authors.map(a => a.name),
+      datasets: [{
+        label: 'Avg days',
+        data: authors.map(a => a.avg),
+        backgroundColor: 'rgba(124,92,252,0.7)',
+        borderColor: '#7c5cfc',
+        borderWidth: 1,
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, title: { display: true, text: 'Days', color: '#6b6b80' } }
+      }
+    }
+  });
+}
+
+function renderTable(prs) {
+  const sorted = [...prs].sort((a, b) => a.hours_to_merge - b.hours_to_merge);
+  const body = document.getElementById('prTableBody');
+  body.innerHTML = sorted.map(p => {
+    const days = (p.hours_to_merge / 24).toFixed(1);
+    const hrs = p.hours_to_merge;
+    const badge = hrs < 12
+      ? `<span class="badge badge-fast">⚡ Fast</span>`
+      : hrs < 72
+        ? `<span class="badge badge-mid">⏱ Medium</span>`
+        : `<span class="badge badge-slow">🐢 Slow</span>`;
+    const opened = new Date(p.created_at).toLocaleDateString();
+    const merged = new Date(p.merged_at).toLocaleDateString();
+    return `<tr>
+      <td style="color:var(--muted)">#${p.number}</td>
+      <td class="pr-title"><a class="pr-link" href="${p.url}" target="_blank" rel="noopener">${escHtml(p.title)}</a></td>
+      <td style="color:var(--accent2)">${escHtml(p.author)}</td>
+      <td style="color:var(--muted)">${opened}</td>
+      <td style="color:var(--muted)">${merged}</td>
+      <td><span style="color:#fff;font-weight:500">${days}d</span> <span style="color:var(--muted);font-size:0.7rem">(${p.hours_to_merge}h)</span></td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
